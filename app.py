@@ -8,63 +8,62 @@ st.set_page_config(
     layout="wide"
 )
 
-# تصميم الشعار الاحترافي المخصص بنمط النظام الطبي المؤسسي بدون أي إيموجي
-custom_svg_logo = """
-<svg width="45" height="45" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <circle cx="50" cy="50" r="48" fill="url(#bg_grad)" stroke="#38BDF8" stroke-width="2"/>
-  <path d="M15 50H32L40 30L55 70L65 45L72 55H85" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="68" y="15" width="20" height="20" rx="4" fill="#0EA5E9"/>
-  <path d="M78 20V30M73 25H83" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
-  <defs>
-    <linearGradient id="bg_grad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#0F172A"/>
-      <stop offset="100%" stop-color="#1E3A8A"/>
-    </linearGradient>
-  </defs>
-</svg>
-"""
+# بيانات الأقسام واسم المستخدم وكلمة المرور الخاصة بكل قسم
+CREDENTIALS = {
+    "Executive Management": {"user": "admin_exec", "pass": "exec2026"},
+    "IT Infrastructure & Biomed": {"user": "tech_biomed", "pass": "biomed2026"},
+    "Quality & Patient Safety": {"user": "quality_lead", "pass": "quality2026"}
+}
 
-st.markdown(f"""
-    <style>
-    .brand-container {{
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        margin-bottom: 5px;
-    }}
-    .brand-title {{
-        font-size: 32px;
-        font-weight: 700;
-        color: #0F172A;
-        margin: 0;
-        letter-spacing: -0.5px;
-    }}
-    .brand-plus {{
-        color: #0EA5E9;
-    }}
-    </style>
+# حالة الجلسة لتسجيل الدخول
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+    st.session_state["role"] = None
+
+# شاشة تسجيل الدخول الرئيسية
+if not st.session_state["authenticated"]:
+    st.markdown("<h2 style='text-align: center; color: #0F172A;'>Anomalix+ Enterprise CMMS</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #64748B;'>تسجيل الدخول الموحد للأقسام المؤسسية</p>", unsafe_allow_html=True)
     
-    <div class="brand-container">
-        <div>{custom_svg_logo}</div>
-        <div>
-            <h1 class="brand-title">Anomalix<span class="brand-plus">+</span> Enterprise CMMS</h1>
-        </div>
-    </div>
-    <p style='color: #64748B; font-size: 15px; margin-top: 0;'>نظام إدارة أصول المستشفيات وبنية الأجهزة التحتية والموثوقية التشغيلية</p>
-""", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        selected_role = st.selectbox("اختر القسم / الدور:", list(CREDENTIALS.keys()))
+        username_input = st.text_input("اسم المستخدم:")
+        password_input = st.text_input("كلمة المرور:", type="password")
+        
+        if st.button("تسجيل الدخول"):
+            expected_user = CREDENTIALS[selected_role]["user"]
+            expected_pass = CREDENTIALS[selected_role]["pass"]
+            
+            if username_input == expected_user and password_input == expected_pass:
+                st.session_state["authenticated"] = True
+                st.session_state["role"] = selected_role
+                st.rerun()
+            else:
+                st.error("اسم المستخدم أو كلمة المرور غير صحيحة. حاول مرة أخرى.")
+    
+    st.stop()
 
-st.markdown("---")
+# في حال تم تسجيل الدخول بنجاح
+user_role = st.session_state["role"]
 
-# الشريط الجانبي وصلاحيات المستخدم
-st.sidebar.markdown("### Anomalix+ Security Core")
-user_role = st.sidebar.selectbox(
-    "Active User Role (RBAC):",
-    ["Executive Management", "Quality & Patient Safety", "E-Health & EHR", "IT Infrastructure & Biomed", "Helpdesk & Staff"]
-)
-
-st.sidebar.markdown("---")
+# الشريط الجانبي وخيار تسجيل الخروج
+st.sidebar.markdown(f"### النظام النشط: {user_role}")
 st.sidebar.markdown("Compliance: SDAIA & NCA (ECC) Aligned")
 st.sidebar.markdown("Security: AES-256 / TLS 1.3 Active")
+
+if st.sidebar.button("تسجيل الخروج"):
+    st.session_state["authenticated"] = False
+    st.session_state["role"] = None
+    st.rerun()
+
+# الهوية البصرية والعنوان
+st.markdown("""
+    <div style='background: linear-gradient(135deg, #0F172A 0%, #1E3A8A 100%); padding: 20px; border-radius: 10px; color: white; margin-bottom: 20px;'>
+        <h1 style='margin:0; font-size: 28px;'>Anomalix+ Enterprise CMMS</h1>
+        <p style='margin:5px 0 0 0; color: #38BDF8;'>نظام إدارة أصول المستشفيات وبنية الأجهزة التحتية والموثوقية التشغيلية</p>
+    </div>
+""", unsafe_allow_html=True)
 
 # البيانات المركزية للأصول
 def get_enterprise_asset_registry():

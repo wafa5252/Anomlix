@@ -23,7 +23,6 @@ import streamlit as st
 # ----------------------------------------------------------------------------
 # Constants and configuration
 # ----------------------------------------------------------------------------
-# Demo-only credentials (prototype authentication, NOT production security).
 DEMO_CREDENTIALS = {
     "Executive Management": {"user": "admin_exec", "pass": "exec2026"},
     "E-Health Management": {"user": "ehealth_mgr", "pass": "ehealth2026"},
@@ -40,7 +39,7 @@ ROLE_FOCUS = {
     "IT Infrastructure & Biomed": "Operating conditions: temperature vs. band, error events, runtime and due dates.",
 }
 
-# Brand palette (shared by CSS, logo and header)
+# Brand palette
 BRAND = {"navy": "#0F172A", "blue": "#1E3A8A", "cyan": "#38BDF8", "amber": "#F59E0B", "light": "#E2E8F0"}
 
 # Logo concept "Pulse Deviation"
@@ -71,4 +70,110 @@ DEFAULT_LOW_MAX = 30
 DEFAULT_HIGH_MIN = 55
 MIN_COVERAGE = 0.50
 ERROR_CAP = {"Medical Equipment": 10, "IT Infrastructure": 20}
-CRITICALITY_MULTIP
+CRITICALITY_MULTIPLIER = {"Critical": 1.25, "High": 1.10, "Medium": 1.00, "Low": 0.90}
+MAINT_WARNING_DAYS = 14
+WO_STATUSES = ["Open", "Assigned", "In Progress", "Awaiting Parts", "Completed"]
+WO_PRIORITIES = ["Low", "Medium", "High", "Urgent"]
+WO_TEAMS = ["Biomedical Engineering (demo)", "IT Infrastructure Team (demo)",
+            "Vendor Service (demo)"]
+
+TEXT_COLS = ["asset_id", "asset_name", "category", "location", "department",
+             "criticality", "status", "vendor"]
+NUM_COLS = ["health_score", "temperature_c", "temp_band_min", "temp_band_max", "temp_margin",
+            "error_events_30d", "runtime_hours", "rated_hours", "operating_stress"]
+CLIP_RANGES = {"health_score": (0, 100), "operating_stress": (0, 100),
+               "error_events_30d": (0, 10_000), "runtime_hours": (0, 10_000_000)}
+PLAUSIBLE_TEMP = (-80.0, 200.0)
+
+LOCAL_CODE_SYSTEM = "urn:anomalix:demo:codes"
+LOCAL_ID_SYSTEM = "urn:anomalix:demo:asset-id"
+
+
+# ----------------------------------------------------------------------------
+# Small helpers
+# ----------------------------------------------------------------------------
+def to_float(value, default=None):
+    if isinstance(value, bool):
+        return default
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    return number if np.isfinite(number) else default
+
+
+def clip01(x):
+    return float(min(1.0, max(0.0, x)))
+
+
+def clamp(x, lo, hi):
+    return min(hi, max(lo, x))
+
+
+def fmt(value, digits=1, default="n/a", signed=False):
+    v = to_float(value)
+    if v is None:
+        return default
+    return f"{v:+.{digits}f}" if signed else f"{v:.{digits}f}"
+
+
+def utc_now_str():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def clean_text(value, default=None):
+    if value is None:
+        return default
+    try:
+        if pd.isna(value):
+            return default
+    except (TypeError, ValueError):
+        pass
+    text = str(value).strip()
+    return text if text else default
+
+
+def csv_safe(df):
+    out = df.copy()
+    for col in out.columns:
+        if not pd.api.types.is_numeric_dtype(out[col]) and not pd.api.types.is_bool_dtype(out[col]):
+            out[col] = out[col].map(
+                lambda v: "'" + v if isinstance(v, str) and v and v[0] in "=+-@\t\r" else v)
+    return out
+
+
+def logo_img(size=56):
+    b64 = base64.b64encode(LOGO_SVG.encode("utf-8")).decode("ascii")
+    return (f'<img alt="Anomalix+ logo" width="{size}" height="{size}" '
+            f'src="data:image/svg+xml;base64,{b64}"/>')
+
+
+def inject_css():
+    st.markdown(
+        f"""
+        <style>
+        div[data-testid="stMetric"] {{
+            background: #F8FAFC; border: 1px solid {BRAND['light']};
+            border-left: 4px solid {BRAND['cyan']};
+            border-radius: 10px; padding: 12px 16px;
+        }}
+        .anx-header {{
+            background: linear-gradient(135deg, {BRAND['navy']} 0%, {BRAND['blue']} 100%);
+            padding: 18px 24px; border-radius: 10px; color: white; margin-bottom: 14px;
+        }}
+        .anx-brand {{ display: flex; align-items: center; gap: 16px; }}
+        .anx-header h1 {{ margin: 0; font-size: 28px; color: white; }}
+        .anx-header p  {{ margin: 4px 0 0 0; color: {BRAND['cyan']}; }}
+        .anx-ar {{ direction: rtl; text-align: right; }}
+        .anx-login-logo {{ text-align: center; margin-bottom: 4px; }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# ----------------------------------------------------------------------------
+# Sample data and validation
+# ----------------------------------------------------------------------------
+def build_sample_assets():
+    today =

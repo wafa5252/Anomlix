@@ -1,5 +1,5 @@
 """
-Anomalix+ Enterprise Hospital CMMS  --  Demo / Proof-of-Concept (v2, bug-fix pass)
+Anomalix+ Enterprise Hospital CMMS  --  Demo / Proof-of-Concept (v3: role workspaces + branding)
 ===================================================================================
 PROTOTYPE ONLY. All asset data, sensor-style readings, risk scores, priorities and
 work orders are SYNTHETIC and held in memory (Streamlit session state). Nothing is
@@ -9,6 +9,7 @@ The FHIR output is illustrative JSON that has NOT been validated for conformance
 
 Run:  streamlit run app.py
 """
+import base64
 import hmac
 import json
 import re
@@ -23,11 +24,36 @@ import streamlit as st
 # Constants and configuration
 # ----------------------------------------------------------------------------
 # Demo-only credentials (prototype authentication, NOT production security).
+# The role only selects which "Role Workspace" lens opens first; it is NOT access control.
 DEMO_CREDENTIALS = {
     "Executive Management": {"user": "admin_exec", "pass": "exec2026"},
+    "E-Health Management": {"user": "ehealth_mgr", "pass": "ehealth2026"},
+    "Data Quality & Governance": {"user": "data_gov", "pass": "datagov2026"},
+    "Technical Support & Applications": {"user": "tech_support", "pass": "support2026"},
     "IT Infrastructure & Biomed": {"user": "tech_biomed", "pass": "biomed2026"},
     "Quality & Patient Safety": {"user": "quality_lead", "pass": "quality2026"},
 }
+
+ROLE_FOCUS = {
+    "Executive Management": "Strategic overview: which assets and departments need decisions first.",
+    "E-Health Management": "Digital-service continuity: IT assets, exposed departments and interoperability readiness.",
+    "Data Quality & Governance": "Asset-data completeness, validation results and traceability of every score.",
+    "Technical Support & Applications": "Proactive alert queue, maintenance schedule and work-order status.",
+    "IT Infrastructure & Biomed": "Operating conditions: temperature vs. band, error events, runtime and due dates.",
+    "Quality & Patient Safety": "Medical equipment needing review by biomedical engineering and clinical staff.",
+}
+
+# Brand palette (shared by CSS, logo and header)
+BRAND = {"navy": "#0F172A", "blue": "#1E3A8A", "cyan": "#38BDF8", "amber": "#F59E0B", "light": "#E2E8F0"}
+
+# Logo concept 1 "Pulse Deviation": a steady pulse line with one amber point that departs from the pattern.
+LOGO_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
+    '<rect width="64" height="64" rx="14" fill="#0F172A"/>'
+    '<polyline points="6,38 19,38 25,38 32,14 40,50 46,38 58,38" fill="none" stroke="#38BDF8" '
+    'stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>'
+    '<circle cx="32" cy="14" r="4.5" fill="#F59E0B"/></svg>'
+)
 
 FACTORS = {
     "health": "Current health score",
@@ -124,21 +150,31 @@ def csv_safe(df):
     return out
 
 
+def logo_img(size=56):
+    """Inline logo as a base64 data-URI <img> (no external files or services)."""
+    b64 = base64.b64encode(LOGO_SVG.encode("utf-8")).decode("ascii")
+    return (f'<img alt="Anomalix+ logo (concept)" width="{size}" height="{size}" '
+            f'src="data:image/svg+xml;base64,{b64}"/>')
+
+
 def inject_css():
     st.markdown(
-        """
+        f"""
         <style>
-        div[data-testid="stMetric"] {
-            background: #F8FAFC; border: 1px solid #E2E8F0;
+        div[data-testid="stMetric"] {{
+            background: #F8FAFC; border: 1px solid {BRAND['light']};
+            border-left: 4px solid {BRAND['cyan']};
             border-radius: 10px; padding: 12px 16px;
-        }
-        .anx-header {
-            background: linear-gradient(135deg, #0F172A 0%, #1E3A8A 100%);
-            padding: 20px 24px; border-radius: 10px; color: white; margin-bottom: 14px;
-        }
-        .anx-header h1 { margin: 0; font-size: 28px; color: white; }
-        .anx-header p  { margin: 4px 0 0 0; color: #38BDF8; }
-        .anx-ar { direction: rtl; text-align: right; }
+        }}
+        .anx-header {{
+            background: linear-gradient(135deg, {BRAND['navy']} 0%, {BRAND['blue']} 100%);
+            padding: 18px 24px; border-radius: 10px; color: white; margin-bottom: 14px;
+        }}
+        .anx-brand {{ display: flex; align-items: center; gap: 16px; }}
+        .anx-header h1 {{ margin: 0; font-size: 28px; color: white; }}
+        .anx-header p  {{ margin: 4px 0 0 0; color: {BRAND['cyan']}; }}
+        .anx-ar {{ direction: rtl; text-align: right; }}
+        .anx-login-logo {{ text-align: center; margin-bottom: 4px; }}
         </style>
         """,
         unsafe_allow_html=True,
@@ -674,7 +710,8 @@ def _eq(a, b):
 # Login screen
 # ----------------------------------------------------------------------------
 def render_login():
-    st.markdown("<h2 style='text-align:center;color:#0F172A;'>Anomalix+ Enterprise CMMS</h2>",
+    st.markdown(f"<div class='anx-login-logo'>{logo_img(72)}</div>", unsafe_allow_html=True)
+    st.markdown(f"<h2 style='text-align:center;color:{BRAND['navy']};'>Anomalix+ Enterprise CMMS</h2>",
                 unsafe_allow_html=True)
     st.markdown("<p style='text-align:center;color:#64748B;'>Prototype demo sign-in "
                 "&nbsp;|&nbsp; <span dir='rtl'>تسجيل الدخول التجريبي</span></p>",
@@ -698,7 +735,8 @@ def render_login():
                 st.error("Incorrect username or password.")
         with st.expander("Demo credentials (for presentation use)"):
             st.table(pd.DataFrame(
-                [{"Role": r, "Username": c["user"], "Password": c["pass"]} for r, c in DEMO_CREDENTIALS.items()]))
+                [{"Role": r, "Username": c["user"], "Password": c["pass"], "Workspace focus": ROLE_FOCUS[r]}
+                 for r, c in DEMO_CREDENTIALS.items()]))
 
 
 # ----------------------------------------------------------------------------
@@ -974,7 +1012,9 @@ def render_impact(scored, cfg):
                              max_chars=500, key=f"wo_notes_{wo_asset}")
         if st.form_submit_button("Create demo work order"):
             create_work_order(wo_asset, arow["asset_name"], pr, team, stat, notes.strip(), arow["risk_score"])
-            st.success("Demo work order created (in-memory prototype record).")
+            # Rerun so other tabs (e.g. Role Workspace, rendered earlier in the script) show the new record.
+            st.session_state["wo_flash"] = ("success", "Demo work order created (in-memory prototype record).")
+            st.rerun()
 
     orders = st.session_state["work_orders"]
     if not orders:
@@ -1036,6 +1076,231 @@ def render_fhir(scored):
             "- Security, privacy and regulatory review by the hospital (including applicable Saudi requirements)")
 
 
+# ----------------------------------------------------------------------------
+# Role workspaces (stakeholder lenses over the same synthetic data)
+# ----------------------------------------------------------------------------
+REVIEW_COLS = ["asset_id", "asset_name", "department", "criticality", "condition",
+               "risk_score", "risk_level", "priority_score", "days_to_maintenance"]
+
+
+def thermal_status(row):
+    """Compare the (simulated) temperature with the asset's assumed band."""
+    s = sanitize_signals(signals_from_row(row.to_dict()))
+    t, lo, hi = s["temperature_c"], s["temp_band_min"], s["temp_band_max"]
+    if t is None or lo is None or hi is None:
+        return "n/a"
+    if t > hi:
+        return f"Above band (+{t - hi:.1f} C)"
+    if t < lo:
+        return f"Below band (-{lo - t:.1f} C)"
+    return "Within band"
+
+
+def runtime_used_pct(row):
+    s = sanitize_signals(signals_from_row(row.to_dict()))
+    if s["runtime_hours"] is None or s["rated_hours"] is None:
+        return float("nan")
+    return round(100.0 * s["runtime_hours"] / s["rated_hours"], 1)
+
+
+def suggested_step(row, cfg):
+    res = compute_risk(signals_from_row(row.to_dict()), row["category"], row["criticality"], cfg)
+    return recommend(res, row["category"], row["criticality"])
+
+
+def _maintenance_counts(df):
+    due = df["days_to_maintenance"].dropna()
+    return int((due < 0).sum()), int(((due >= 0) & (due <= MAINT_WARNING_DAYS)).sum())
+
+
+def view_executive(scored, cfg):
+    overdue, soon = _maintenance_counts(scored)
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Registered assets", len(scored))
+    c2.metric("High illustrative risk", int((scored["risk_level"] == "High").sum()))
+    c3.metric("Maintenance overdue / due in 14 d", f"{overdue} / {soon}")
+    c4.metric("Average health score", fmt(scored["health_score"].mean()))
+    st.markdown("**Top assets to review first (illustrative priority)**")
+    st.dataframe(rank_by_priority(scored).head(3)[REVIEW_COLS], hide_index=True)
+    exposed = sorted(scored.loc[scored["risk_level"].isin(["Moderate", "High"]), "department"].unique())
+    st.write("**Departments with Moderate/High illustrative-risk assets:** "
+             + (", ".join(exposed) if exposed else "none in the current demo data"))
+    st.markdown("**Illustrative maintenance priority by asset**")
+    st.bar_chart(scored.set_index("asset_name")["priority_score"])
+    st.caption("Priority = risk score x criticality factor. Costs and savings are not shown: "
+               "the prototype has no real financial or operational data.")
+
+
+def view_ehealth(scored, cfg):
+    it = scored[scored["category"] == "IT Infrastructure"]
+    watch = scored[scored["criticality"].isin(["Critical", "High"])
+                   & (scored["risk_level"].isin(["Moderate", "High", "Insufficient data"])
+                      | (scored["days_to_maintenance"].fillna(10_000) < 0))]
+    c1, c2, c3 = st.columns(3)
+    c1.metric("IT infrastructure assets", len(it))
+    c2.metric("Critical IT assets", int((it["criticality"] == "Critical").sum()))
+    c3.metric("Service-continuity watch-list", len(watch))
+    st.markdown("**IT infrastructure assets**")
+    if it.empty:
+        st.info("No IT infrastructure assets in the current data.")
+    else:
+        st.dataframe(rank_by_priority(it)[REVIEW_COLS + ["location"]], hide_index=True)
+    st.markdown("**Service-continuity watch-list** (High/Critical criticality with Moderate+ risk or overdue maintenance)")
+    if watch.empty:
+        st.success("No assets currently on the watch-list under the simulated rules.")
+    else:
+        st.dataframe(rank_by_priority(watch)[REVIEW_COLS], hide_index=True)
+    st.caption("Dependency mapping between assets and digital services is not modelled in this prototype. "
+               "The FHIR tab shows an illustrative, unvalidated payload; real interoperability needs "
+               "validation, agreed terminology and a hospital integration project.")
+
+
+def view_governance(scored, cfg):
+    raw = st.session_state["assets_df"]
+    fields = NUM_COLS + ["next_maintenance_due"]
+    comp = pd.DataFrame({
+        "field": fields,
+        "completeness_pct": [round(100.0 * float(raw[f].notna().mean()), 1) if len(raw) else float("nan")
+                             for f in fields]})
+    cov_rows, bad_crit, bad_cat = [], 0, 0
+    for _, row in scored.iterrows():
+        res = compute_risk(signals_from_row(row.to_dict()), row["category"], row["criticality"], cfg)
+        cov_rows.append({"asset_id": row["asset_id"], "data_coverage_pct": round(100 * res["coverage"]),
+                         "missing_inputs": ", ".join(res["missing"]) or "-", "risk_level": res["level"]})
+        bad_crit += normalise_criticality(row["criticality"]) is None
+        bad_cat += row["category"] not in DEFAULT_WEIGHTS
+    warns = st.session_state.get("data_warnings", [])
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Overall field completeness", f"{fmt(comp['completeness_pct'].mean())}%")
+    c2.metric("Load-time validation warnings", len(warns))
+    c3.metric("Unrecognised criticality / category", f"{bad_crit} / {bad_cat}")
+    c4.metric("Assets with insufficient data", int((scored["risk_level"] == "Insufficient data").sum()))
+    left, right = st.columns(2)
+    with left:
+        st.markdown("**Completeness by field**")
+        st.dataframe(comp, hide_index=True)
+    with right:
+        st.markdown("**Risk-score data coverage by asset**")
+        st.dataframe(pd.DataFrame(cov_rows), hide_index=True)
+    if warns:
+        with st.expander("Validation warnings"):
+            for w in warns:
+                st.write("- " + w)
+    st.markdown("**Traceability**")
+    st.write(f"Source: synthetic in-memory sample data, generated {st.session_state['generated_at']} (UTC). "
+             "Each score is reproducible from its listed inputs and the configurable weights "
+             "(see the Registry detail view and the Methodology tab). Duplicate or blank asset IDs are "
+             "dropped at load; invalid numbers are treated as missing and reported above.")
+    st.caption("This view supports data-quality review. It is not a compliance assessment, and no "
+               "regulatory conformance is claimed.")
+
+
+def view_support(scored, cfg):
+    orders = st.session_state.get("work_orders", [])
+    open_orders = [o for o in orders if o["status"] != "Completed"]
+    overdue, soon = _maintenance_counts(scored)
+    alerts = scored[scored["risk_level"].isin(["Moderate", "High", "Insufficient data"])
+                    | (scored["days_to_maintenance"].fillna(10_000) <= MAINT_WARNING_DAYS)]
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Proactive alerts", len(alerts))
+    c2.metric("Maintenance overdue", overdue)
+    c3.metric("Due in 14 days", soon)
+    c4.metric("Open demo work orders", len(open_orders))
+    st.markdown("**Alert queue (ordered by illustrative priority)**")
+    if alerts.empty:
+        st.success("No alerts under the simulated rules.")
+    else:
+        q = rank_by_priority(alerts)[["asset_id", "asset_name", "location", "risk_level",
+                                      "priority_score", "days_to_maintenance"]].copy()
+        q["suggested_next_step"] = [suggested_step(scored[scored["asset_id"] == a].iloc[0], cfg)
+                                    for a in q["asset_id"]]
+        st.dataframe(q, hide_index=True)
+    st.markdown("**Maintenance schedule (soonest / most overdue first)**")
+    sched = scored.sort_values("days_to_maintenance", na_position="last")[
+        ["asset_id", "asset_name", "next_maintenance_due", "days_to_maintenance", "status"]].copy()
+    sched["next_maintenance_due"] = sched["next_maintenance_due"].map(
+        lambda d: "" if d is None or pd.isna(d) else str(d))
+    st.dataframe(sched, hide_index=True)
+    st.markdown("**Open demo work orders**")
+    if open_orders:
+        st.dataframe(pd.DataFrame(open_orders), hide_index=True)
+    else:
+        st.info("No open demo work orders. Create them in the 'Impact & Work Orders' tab.")
+
+
+def view_infrastructure(scored, cfg):
+    rows = []
+    for _, row in scored.iterrows():
+        s = sanitize_signals(signals_from_row(row.to_dict()))
+        band = f"{s['temp_band_min']:.0f}-{s['temp_band_max']:.0f}" if s["temp_band_min"] is not None else "n/a"
+        rows.append({"asset_id": row["asset_id"], "asset_name": row["asset_name"], "location": row["location"],
+                     "temperature_c (simulated)": s["temperature_c"], "assumed_band_c": band,
+                     "thermal_status": thermal_status(row), "error_events_30d": s["error_events_30d"],
+                     "runtime_used_pct": runtime_used_pct(row),
+                     "days_to_maintenance": row["days_to_maintenance"], "risk_level": row["risk_level"]})
+    ops = pd.DataFrame(rows)
+    outside = int(ops["thermal_status"].str.startswith(("Above", "Below")).sum())
+    overdue, _ = _maintenance_counts(scored)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Assets outside assumed temperature band", outside)
+    c2.metric("Maintenance overdue", overdue)
+    c3.metric("Highest recent error count", fmt(ops["error_events_30d"].max(), 0))
+    st.markdown("**Operating conditions (simulated readings)**")
+    st.dataframe(ops, hide_index=True)
+    st.markdown("**Share of rated service life used (%)**")
+    st.bar_chart(ops.set_index("asset_name")["runtime_used_pct"])
+    st.caption("Temperature bands and rated hours are illustrative assumptions; replace them with "
+               "manufacturer specifications before any real use. No live equipment is connected.")
+
+
+def view_quality(scored, cfg):
+    med = scored[scored["category"] == "Medical Equipment"]
+    if med.empty:
+        st.info("No medical equipment in the current data.")
+        return
+    overdue, _ = _maintenance_counts(med)
+    flagged = med[med["criticality"].isin(["Critical", "High"])
+                  & med["risk_level"].isin(["Moderate", "High", "Insufficient data"])]
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Medical equipment assets", len(med))
+    c2.metric("Moderate/High illustrative risk", int(med["risk_level"].isin(["Moderate", "High"]).sum()))
+    c3.metric("Maintenance overdue", overdue)
+    c4.metric("Condition Fair or Poor", int(med["condition"].isin(["Fair", "Poor"]).sum()))
+    st.markdown("**Medical equipment (ranked by illustrative priority)**")
+    st.dataframe(rank_by_priority(med)[REVIEW_COLS + ["status"]], hide_index=True)
+    if flagged.empty:
+        st.success("No High/Critical-criticality medical equipment with Moderate+ risk under the simulated rules.")
+    else:
+        for _, row in rank_by_priority(flagged).iterrows():
+            st.warning(f"{row['asset_name']} ({row['asset_id']}, {row['department']}): "
+                       f"risk {fmt(row['risk_score'])} ({row['risk_level']}), criticality {row['criticality']}. "
+                       "Review by qualified biomedical engineering and clinical personnel before any "
+                       "operational decision.")
+    st.caption("Illustrative simulation only. It does not replace clinical or biomedical engineering judgement "
+               "and makes no patient-safety determination.")
+
+
+ROLE_VIEWS = {
+    "Executive Management": view_executive,
+    "E-Health Management": view_ehealth,
+    "Data Quality & Governance": view_governance,
+    "Technical Support & Applications": view_support,
+    "IT Infrastructure & Biomed": view_infrastructure,
+    "Quality & Patient Safety": view_quality,
+}
+
+
+def render_role_workspace(scored, cfg):
+    role = st.session_state.get("role") or "Executive Management"
+    st.subheader(f"Role Workspace - {role}")
+    st.caption(ROLE_FOCUS.get(role, "") + " Role workspaces are display lenses for the demo, not access "
+               "control: every role can open every tab. All figures derive from the synthetic demo data.")
+    if scored.empty:
+        st.info("No valid assets available.")
+        return
+    ROLE_VIEWS.get(role, view_executive)(scored, cfg)
+
+
 def render_methodology():
     st.subheader("Methodology, Configuration & Validation Notes")
     st.markdown(
@@ -1088,8 +1353,10 @@ def main():
         st.button("Sign out", on_click=do_logout, key="btn_logout")
 
     st.markdown(
-        "<div class='anx-header'><h1>Anomalix+ Enterprise CMMS</h1>"
+        f"<div class='anx-header'><div class='anx-brand'>{logo_img(56)}<div>"
+        "<h1>Anomalix+ Enterprise CMMS</h1>"
         "<p>Hospital asset intelligence prototype - predictive maintenance concepts (simulated)</p>"
+        "</div></div>"
         "<p class='anx-ar'>نموذج أولي لإدارة أصول المستشفيات والموثوقية التشغيلية</p></div>",
         unsafe_allow_html=True)
 
@@ -1099,19 +1366,21 @@ def main():
     cfg = get_config()
     scored = score_dataframe(st.session_state["assets_df"], cfg)
 
-    tabs = st.tabs(["Executive Dashboard", "Enterprise Asset Registry", "Scenario Simulator",
+    tabs = st.tabs(["Role Workspace", "Executive Dashboard", "Enterprise Asset Registry", "Scenario Simulator",
                     "Impact & Work Orders", "HL7 FHIR Demo", "Methodology"])
     with tabs[0]:
-        render_dashboard(scored)
+        render_role_workspace(scored, cfg)
     with tabs[1]:
-        render_registry(scored, cfg)
+        render_dashboard(scored)
     with tabs[2]:
-        render_simulator(scored, cfg)
+        render_registry(scored, cfg)
     with tabs[3]:
-        render_impact(scored, cfg)
+        render_simulator(scored, cfg)
     with tabs[4]:
-        render_fhir(scored)
+        render_impact(scored, cfg)
     with tabs[5]:
+        render_fhir(scored)
+    with tabs[6]:
         render_methodology()
 
     st.markdown("---")

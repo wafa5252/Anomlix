@@ -1,5 +1,5 @@
 """
-Anomalix+ Enterprise Hospital CMMS  --  Demo / Proof-of-Concept (v4: clean roles & branding)
+Anomalix+ Enterprise Hospital CMMS  --  Demo / Proof-of-Concept (v6: End-User Workstation Agent)
 ===================================================================================
 PROTOTYPE ONLY. All asset data, sensor-style readings, risk scores, priorities and
 work orders are SYNTHETIC and held in memory (Streamlit session state). Nothing is
@@ -29,6 +29,7 @@ DEMO_CREDENTIALS = {
     "Data Quality & Governance": {"user": "data_gov", "pass": "datagov2026"},
     "Technical Support & Applications": {"user": "tech_support", "pass": "support2026"},
     "IT Infrastructure & Biomed": {"user": "tech_biomed", "pass": "biomed2026"},
+    "End-User (Workstation Agent)": {"user": "workstation_user", "pass": "user2026"},
 }
 
 ROLE_FOCUS = {
@@ -37,6 +38,7 @@ ROLE_FOCUS = {
     "Data Quality & Governance": "Asset-data completeness, validation results and traceability of every score.",
     "Technical Support & Applications": "Proactive alert queue, maintenance schedule and work-order status.",
     "IT Infrastructure & Biomed": "Operating conditions: temperature vs. band, error events, runtime and due dates.",
+    "End-User (Workstation Agent)": "Local workstation status, client-side anomaly detection, and automated alert generation.",
 }
 
 BRAND = {"navy": "#0F172A", "blue": "#1E3A8A", "cyan": "#38BDF8", "amber": "#F59E0B", "light": "#E2E8F0"}
@@ -452,13 +454,6 @@ def recommend(result, category, criticality):
     return base
 
 
-def suggest_wo_priority(priority_score):
-    p = to_float(priority_score)
-    if p is None:
-        return "Medium"
-    return "Urgent" if p >= 70 else "High" if p >= 55 else "Medium" if p >= 30 else "Low"
-
-
 def score_dataframe(df, cfg):
     out = df.copy()
     cols = {"risk_score": [], "risk_level": [], "priority_score": [], "condition": [],
@@ -766,12 +761,23 @@ def view_infrastructure(scored, cfg):
     st.dataframe(scored[scored["category"] == "IT Infrastructure"], hide_index=True)
 
 
+def view_end_user(scored, cfg):
+    st.markdown("**End-User Workstation Agent Lens**")
+    st.info("Welcome! The local agent running on your workstation continuously monitors device health, performance metrics, and detects potential anomalies automatically.")
+    if scored.empty:
+        st.info("No workstation data available.")
+        return
+    st.markdown("**Your Workstation Status & Local Metrics**")
+    st.dataframe(scored[["asset_id", "asset_name", "department", "status", "health_score", "condition"]], hide_index=True)
+
+
 ROLE_VIEWS = {
     "Executive Management": view_executive,
     "E-Health Management": view_ehealth,
     "Data Quality & Governance": view_governance,
     "Technical Support & Applications": view_support,
     "IT Infrastructure & Biomed": view_infrastructure,
+    "End-User (Workstation Agent)": view_end_user,
 }
 
 
